@@ -1,16 +1,7 @@
-use crate::types::RowData;
+use crate::types::{parse_list, RowData};
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlElement;
-
-fn parse_list(s: &str) -> Vec<f64> {
-    s.split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .filter_map(|s| s.parse::<f64>().ok())
-        .filter(|n| *n > 0.0)
-        .collect()
-}
 
 fn query_sel(el: &web_sys::Element, sel: &str) -> Option<HtmlElement> {
     el.query_selector(sel)
@@ -26,8 +17,28 @@ pub fn ConfigTable(
     rows: RwSignal<Vec<RowData>>,
 ) -> impl IntoView {
     let generate = move |_| {
-        let speeds_list = parse_list(&speeds.get());
-        let accels_list = parse_list(&accels.get());
+        let has_existing = rows.with(|r| {
+            r.iter().any(|rd| {
+                !rd.flow.get().trim().is_empty() || !rd.pa.get().trim().is_empty()
+            })
+        });
+        if has_existing {
+            let proceed = web_sys::window()
+                .and_then(|w| {
+                    w.confirm_with_message(
+                        "This will clear all entered values. Continue?",
+                    )
+                    .ok()
+                })
+                .unwrap_or(false);
+            if !proceed {
+                return;
+            }
+        }
+        let mut speeds_list = parse_list(&speeds.get());
+        let mut accels_list = parse_list(&accels.get());
+        speeds_list.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        accels_list.sort_by(|a, b| a.partial_cmp(b).unwrap());
         if speeds_list.is_empty() || accels_list.is_empty() {
             rows.set(Vec::new());
             return;
@@ -175,7 +186,15 @@ pub fn ConfigTable(
                                             />
                                         </td>
                                         <td class="model-values">
-                                            {move || format!("{}, {}, {}", row.pa.get(), row.flow.get(), row.accel)}
+                                            {move || {
+                                                let pa = row.pa.get();
+                                                let flow = row.flow.get();
+                                                if pa.trim().is_empty() && flow.trim().is_empty() {
+                                                    String::new()
+                                                } else {
+                                                    format!("{} , {} , {}", pa, flow, row.accel)
+                                                }
+                                            }}
                                         </td>
                                     </tr>
                                 }

@@ -3,18 +3,11 @@ use crate::storage;
 use crate::types::*;
 use leptos::prelude::*;
 
-fn parse_list(s: &str) -> Vec<f64> {
-    s.split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .filter_map(|s| s.parse::<f64>().ok())
-        .filter(|n| *n > 0.0)
-        .collect()
-}
-
 fn generate_rows(speeds_str: &str, accels_str: &str, rows: RwSignal<Vec<RowData>>) {
-    let speeds = parse_list(speeds_str);
-    let accels = parse_list(accels_str);
+    let mut speeds = parse_list(speeds_str);
+    let mut accels = parse_list(accels_str);
+    speeds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    accels.sort_by(|a, b| a.partial_cmp(b).unwrap());
     if speeds.is_empty() || accels.is_empty() {
         rows.set(Vec::new());
         return;
@@ -74,7 +67,7 @@ pub fn App() -> impl IntoView {
     let config_text = Memo::new(move |_| {
         rows.with(|r| {
             r.iter()
-                .map(|rd| format!("{}, {}, {}", rd.pa.get(), rd.flow.get(), rd.accel))
+                .map(|rd| format!("{} , {} , {}", rd.pa.get(), rd.flow.get(), rd.accel))
                 .collect::<Vec<_>>()
                 .join("\n")
         })
@@ -191,5 +184,91 @@ pub fn App() -> impl IntoView {
             config_text=config_text
             all_filled=all_filled
         />
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_row(speed: f64, accel: f64, flow: &str, pa: &str) -> RowData {
+        RowData {
+            speed,
+            accel,
+            flow: RwSignal::new(flow.to_string()),
+            pa: RwSignal::new(pa.to_string()),
+        }
+    }
+
+    #[test]
+    fn collect_cells_collects_all_rows() {
+        let rows = vec![
+            make_row(50.0, 1000.0, "3.84", "0.036"),
+            make_row(100.0, 1000.0, "7.68", "0.036"),
+        ];
+        let cells = collect_cells(&rows);
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].speed, 50.0);
+        assert_eq!(cells[0].flow, "3.84");
+        assert_eq!(cells[1].pa, "0.036");
+    }
+
+    #[test]
+    fn collect_cells_empty() {
+        let rows: Vec<RowData> = Vec::new();
+        let cells = collect_cells(&rows);
+        assert!(cells.is_empty());
+    }
+
+    #[test]
+    fn fill_from_config_populates_cells() {
+        let rows = vec![
+            make_row(50.0, 1000.0, "", ""),
+            make_row(100.0, 2000.0, "", ""),
+        ];
+        let config = SavedConfig {
+            speeds: "50, 100".into(),
+            accelerations: "1000, 2000".into(),
+            cells: vec![
+                SerializedCell {
+                    speed: 50.0,
+                    accel: 1000.0,
+                    flow: "3.84".into(),
+                    pa: "0.036".into(),
+                },
+                SerializedCell {
+                    speed: 100.0,
+                    accel: 2000.0,
+                    flow: "7.68".into(),
+                    pa: "0.03".into(),
+                },
+            ],
+        };
+        fill_from_config(&rows, &config);
+        assert_eq!(rows[0].flow.get(), "3.84");
+        assert_eq!(rows[0].pa.get(), "0.036");
+        assert_eq!(rows[1].flow.get(), "7.68");
+        assert_eq!(rows[1].pa.get(), "0.03");
+    }
+
+    #[test]
+    fn fill_from_config_partial_match() {
+        let rows = vec![
+            make_row(50.0, 1000.0, "", ""),
+            make_row(999.0, 999.0, "old", "old"),
+        ];
+        let config = SavedConfig {
+            speeds: "50".into(),
+            accelerations: "1000".into(),
+            cells: vec![SerializedCell {
+                speed: 50.0,
+                accel: 1000.0,
+                flow: "new".into(),
+                pa: "new".into(),
+            }],
+        };
+        fill_from_config(&rows, &config);
+        assert_eq!(rows[0].flow.get(), "new");
+        assert_eq!(rows[1].flow.get(), "old");
     }
 }
