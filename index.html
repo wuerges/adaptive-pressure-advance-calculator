@@ -140,10 +140,26 @@ tbody td input:focus {
   transition: background .15s;
 }
 .copy-btn:hover { background: #dee2e6; }
+.copy-btn:disabled {
+  background: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 .copy-btn.copied {
   background: #2d6a4f;
   color: #fff;
   pointer-events: none;
+}
+.status-good {
+  color: #2d6a4f;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.status-bad {
+  color: #c92a2a;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 textarea {
   width: 100%;
@@ -164,11 +180,88 @@ textarea {
   color: #868e96;
   font-style: italic;
 }
+/* Saved configs */
+.saved-configs {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.saved-configs h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+.configs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.configs-row:last-child { margin-bottom: 0; }
+.configs-row select {
+  padding: 7px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: #fff;
+  min-width: 200px;
+}
+.configs-row select:focus {
+  outline: 2px solid #4361ee;
+  outline-offset: -1px;
+  border-color: #4361ee;
+}
+.configs-row input[type="text"] {
+  padding: 7px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 160px;
+}
+.configs-row input[type="text"]:focus {
+  outline: 2px solid #4361ee;
+  outline-offset: -1px;
+  border-color: #4361ee;
+}
+.btn-danger {
+  background: #c92a2a;
+  color: #fff;
+}
+.btn-danger:hover { background: #b02525; }
+.btn-danger:disabled {
+  background: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.btn-save {
+  background: #2d6a4f;
+  color: #fff;
+}
+.btn-save:hover { background: #245a42; }
 </style>
 </head>
 <body>
 
 <h1>Adaptive Pressure Advance</h1>
+
+<div class="saved-configs">
+  <h2>Saved Configs</h2>
+  <div class="configs-row">
+    <select id="profileSelect">
+      <option value="">-- Save new --</option>
+    </select>
+    <button class="btn-danger" id="deleteBtn" disabled>Delete</button>
+  </div>
+  <div class="configs-row">
+    <input type="text" id="profileName" placeholder="Profile name...">
+    <button class="btn-save" id="saveBtn">Save</button>
+  </div>
+</div>
 
 <div class="input-section">
   <div class="input-group">
@@ -200,7 +293,8 @@ textarea {
 <div class="config-section">
   <div class="config-header">
     <h2>Config</h2>
-    <button class="copy-btn" id="copyBtn">Copy</button>
+    <span id="configStatus" class="status-bad">✗ Fill in all Flow and PA values</span>
+    <button class="copy-btn" id="copyBtn" disabled>Copy</button>
   </div>
   <textarea id="configOutput" readonly spellcheck="false"></textarea>
 </div>
@@ -212,9 +306,153 @@ const generateBtn = document.getElementById('generateBtn');
 const tbody = document.getElementById('tbody');
 const configOutput = document.getElementById('configOutput');
 const copyBtn = document.getElementById('copyBtn');
+const configStatus = document.getElementById('configStatus');
+const profileSelect = document.getElementById('profileSelect');
+const profileName = document.getElementById('profileName');
+const saveBtn = document.getElementById('saveBtn');
+const deleteBtn = document.getElementById('deleteBtn');
+const STORAGE_KEY = 'apa-configs';
+
+function getConfigs() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function setConfigs(c) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+}
+
+function populateDropdown() {
+  const configs = getConfigs();
+  const prev = profileSelect.value;
+  profileSelect.innerHTML = '<option value="">-- Save new --</option>';
+  for (const name of Object.keys(configs).sort()) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    profileSelect.appendChild(opt);
+  }
+  if ([...profileSelect.options].some(o => o.value === prev)) {
+    profileSelect.value = prev;
+  }
+  updateProfileButtons();
+}
+
+function updateProfileButtons() {
+  deleteBtn.disabled = !profileSelect.value;
+}
+
+function collectCells() {
+  const rows = tbody.querySelectorAll('.data-row');
+  const cells = {};
+  for (const row of rows) {
+    const speed = row.querySelector('td:first-child').textContent;
+    const accel = row.dataset.accel;
+    cells[`${speed}-${accel}`] = {
+      flow: row.querySelector('.flow-input').value,
+      pa: row.querySelector('.pa-input').value
+    };
+  }
+  return cells;
+}
+
+function fillCells(cells) {
+  const rows = tbody.querySelectorAll('.data-row');
+  for (const row of rows) {
+    const speed = row.querySelector('td:first-child').textContent;
+    const accel = row.dataset.accel;
+    const data = cells[`${speed}-${accel}`];
+    if (!data) continue;
+    row.querySelector('.flow-input').value = data.flow || '';
+    row.querySelector('.pa-input').value = data.pa || '';
+  }
+}
+
+function refreshDisplay() {
+  const rows = tbody.querySelectorAll('.data-row');
+  for (const row of rows) {
+    const fi = row.querySelector('.flow-input');
+    const pi = row.querySelector('.pa-input');
+    const accel = row.dataset.accel;
+    row.querySelector('.model-values').textContent = `${pi.value || ''}, ${fi.value || ''}, ${accel}`;
+  }
+  updateConfig();
+}
+
+function saveConfig() {
+  const name = profileName.value.trim();
+  if (!name) { alert('Enter a profile name.'); return; }
+  const configs = getConfigs();
+  if (configs[name] && !confirm(`Profile "${name}" already exists. Overwrite?`)) return;
+  configs[name] = {
+    speeds: speedsInput.value,
+    accelerations: accelsInput.value,
+    cells: collectCells()
+  };
+  setConfigs(configs);
+  populateDropdown();
+  profileSelect.value = name;
+  updateProfileButtons();
+  saveBtn.textContent = 'Saved!';
+  setTimeout(() => { saveBtn.textContent = 'Save'; }, 1500);
+}
+
+function loadConfig() {
+  const name = profileSelect.value;
+  if (!name) return;
+  const configs = getConfigs();
+  const config = configs[name];
+  if (!config) return;
+  speedsInput.value = config.speeds;
+  accelsInput.value = config.accelerations;
+  generate();
+  if (config.cells) fillCells(config.cells);
+  refreshDisplay();
+}
+
+function deleteConfig() {
+  const name = profileSelect.value;
+  if (!name) return;
+  if (!confirm(`Delete profile "${name}"?`)) return;
+  const configs = getConfigs();
+  delete configs[name];
+  setConfigs(configs);
+  profileSelect.value = '';
+  profileName.value = '';
+  populateDropdown();
+  updateProfileButtons();
+}
+
+profileSelect.addEventListener('change', () => {
+  profileName.value = profileSelect.value;
+  updateProfileButtons();
+  if (profileSelect.value) loadConfig();
+});
+saveBtn.addEventListener('click', saveConfig);
+deleteBtn.addEventListener('click', deleteConfig);
 
 function parseList(str) {
   return str.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0);
+}
+
+function validate() {
+  const rows = tbody.querySelectorAll('.data-row');
+  if (!rows.length) {
+    copyBtn.disabled = true;
+    configStatus.className = 'status-bad';
+    configStatus.textContent = '✗ Generate a table first';
+    return false;
+  }
+  let allFilled = true;
+  for (const row of rows) {
+    const flow = row.querySelector('.flow-input').value.trim();
+    const pa = row.querySelector('.pa-input').value.trim();
+    if (!flow || !pa) { allFilled = false; break; }
+  }
+  copyBtn.disabled = !allFilled;
+  configStatus.textContent = allFilled ? '✓ Ready to copy' : '✗ Fill in all Flow and PA values';
+  configStatus.className = allFilled ? 'status-good' : 'status-bad';
+  return allFilled;
 }
 
 function updateConfig() {
@@ -227,6 +465,7 @@ function updateConfig() {
     lines.push(`${paInput.value || ''}, ${flowInput.value || ''}, ${accel}`);
   }
   configOutput.value = lines.join('\n');
+  validate();
 }
 
 function generate() {
@@ -244,6 +483,7 @@ function generate() {
     tr.appendChild(td);
     tbody.appendChild(tr);
     configOutput.value = '';
+    validate();
     return;
   }
 
@@ -358,6 +598,7 @@ copyBtn.addEventListener('click', () => {
 
 generateBtn.addEventListener('click', generate);
 generate();
+populateDropdown();
 </script>
 </body>
 </html>
