@@ -17,8 +17,8 @@ Built with Leptos (Rust → WASM), bundled with Trunk, deployable on Vercel.
 
 - **Speed** and **Acceleration** are read-only (from the inputs).
 - **Flow** and **PA** are editable `<input>` fields, blank by default.
-- **Model values** auto-compute as `PA, Flow, Acceleration` and update live as the user types.
-- The table contains all combinations of speeds × accelerations, sorted by acceleration then speed.
+- **Model values** auto-compute as `PA , Flow , Acceleration` and update live as the user types.
+- The table contains all combinations of speeds × accelerations, sorted ascending by acceleration then speed.
 
 ## Keyboard navigation
 
@@ -29,7 +29,7 @@ Built with Leptos (Rust → WASM), bundled with Trunk, deployable on Vercel.
 
 ## Config output
 
-- A text area below the table showing one line per row: `PA, Flow, Acceleration`
+- A text area below the table showing one line per row: `PA , Flow , Acceleration`
 - Updates live as cells are edited.
 - A **Copy** button next to the text area copies the config to the clipboard.
 - A **good/bad status indicator** shows whether all cells are filled. The copy button is disabled until all Flow and PA values are entered.
@@ -80,6 +80,13 @@ The config text area shows one line per row:
 0.026 , 11.51 , 4000
 0.024 , 15.35 , 4000
 ```
+
+## Edge cases
+
+- **Empty table**: before Generate is clicked, a placeholder message appears ("Enter valid speeds and accelerations, then click Generate").
+- **Re-generate**: editing speeds or accelerations after the table is built does not auto-update the table — click Generate again. If cells have been filled, a confirmation dialog asks before clearing them.
+- **Name field vs dropdown**: typing a new name while a profile is selected in the dropdown does not change the dropdown selection. Save uses the name field, Delete uses the dropdown selection.
+- **Invalid inputs**: non-numeric, zero, negative, Infinity, and NaN values in the comma-separated lists are silently ignored.
 
 ## Build & deploy
 
