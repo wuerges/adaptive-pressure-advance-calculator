@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Pressure Advance</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #f5f6f8;
+  color: #212529;
+}
+h1 {
+  font-size: 1.4rem;
+  margin-bottom: 20px;
+  color: #1a1a2e;
+}
+.input-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.input-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 4px;
+}
+.input-group input {
+  padding: 7px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 180px;
+}
+.input-group input:focus {
+  outline: 2px solid #4361ee;
+  outline-offset: -1px;
+  border-color: #4361ee;
+}
+button {
+  padding: 8px 20px;
+  background: #4361ee;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background .15s;
+}
+button:hover { background: #3a56d4; }
+button:focus-visible {
+  outline: 2px solid #4361ee;
+  outline-offset: 2px;
+}
+.table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+thead th {
+  position: sticky;
+  top: 0;
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+tbody td {
+  padding: 5px 12px;
+  border-bottom: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+tbody tr:hover { background: #f1f3f5; }
+tbody td input {
+  width: 80px;
+  padding: 5px 6px;
+  border: 1px solid #dee2e6;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  background: #fafbfc;
+  transition: background .15s, border-color .15s;
+}
+tbody td input:hover { background: #fff; border-color: #adb5bd; }
+tbody td input:focus {
+  outline: 2px solid #4361ee;
+  outline-offset: -1px;
+  border-color: #4361ee;
+  background: #fff;
+}
+.model-values {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  color: #495057;
+}
+.config-section {
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.config-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+.copy-btn {
+  padding: 4px 14px;
+  font-size: 0.8rem;
+  background: #e9ecef;
+  color: #212529;
+  transition: background .15s;
+}
+.copy-btn:hover { background: #dee2e6; }
+.copy-btn.copied {
+  background: #2d6a4f;
+  color: #fff;
+  pointer-events: none;
+}
+textarea {
+  width: 100%;
+  height: 200px;
+  padding: 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+  tab-size: 2;
+  background: #fafbfc;
+  color: #212529;
+}
+.empty-state {
+  padding: 24px;
+  text-align: center;
+  color: #868e96;
+  font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<h1>Adaptive Pressure Advance</h1>
+
+<div class="input-section">
+  <div class="input-group">
+    <label for="speeds">Speeds</label>
+    <input id="speeds" value="50, 100, 150, 200">
+  </div>
+  <div class="input-group">
+    <label for="accelerations">Accelerations</label>
+    <input id="accelerations" value="1000, 2000, 4000">
+  </div>
+  <button id="generateBtn">Generate Table</button>
+</div>
+
+<div class="table-wrapper">
+  <table id="table">
+    <thead>
+      <tr>
+        <th>Speed</th>
+        <th>Flow</th>
+        <th>Acceleration</th>
+        <th>PA</th>
+        <th>Model values</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="config-section">
+  <div class="config-header">
+    <h2>Config</h2>
+    <button class="copy-btn" id="copyBtn">Copy</button>
+  </div>
+  <textarea id="configOutput" readonly spellcheck="false"></textarea>
+</div>
+
+<script>
+const speedsInput = document.getElementById('speeds');
+const accelsInput = document.getElementById('accelerations');
+const generateBtn = document.getElementById('generateBtn');
+const tbody = document.getElementById('tbody');
+const configOutput = document.getElementById('configOutput');
+const copyBtn = document.getElementById('copyBtn');
+
+function parseList(str) {
+  return str.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0);
+}
+
+function updateConfig() {
+  const rows = tbody.querySelectorAll('.data-row');
+  const lines = [];
+  for (const row of rows) {
+    const flowInput = row.querySelector('.flow-input');
+    const paInput = row.querySelector('.pa-input');
+    const accel = row.dataset.accel;
+    lines.push(`${paInput.value || ''}, ${flowInput.value || ''}, ${accel}`);
+  }
+  configOutput.value = lines.join('\n');
+}
+
+function generate() {
+  const speeds = parseList(speedsInput.value);
+  const accels = parseList(accelsInput.value);
+
+  tbody.innerHTML = '';
+
+  if (!speeds.length || !accels.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.className = 'empty-state';
+    td.textContent = 'Enter valid speeds and accelerations, then click Generate.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    configOutput.value = '';
+    return;
+  }
+
+  for (const accel of accels) {
+    for (const speed of speeds) {
+      const tr = document.createElement('tr');
+      tr.className = 'data-row';
+      tr.dataset.accel = accel;
+
+      const speedTd = document.createElement('td');
+      speedTd.textContent = speed;
+
+      const flowTd = document.createElement('td');
+      const flowInput = document.createElement('input');
+      flowInput.type = 'text';
+      flowInput.className = 'flow-input';
+      flowInput.placeholder = '—';
+      flowTd.appendChild(flowInput);
+
+      const accelTd = document.createElement('td');
+      accelTd.textContent = accel;
+
+      const paTd = document.createElement('td');
+      const paInput = document.createElement('input');
+      paInput.type = 'text';
+      paInput.className = 'pa-input';
+      paInput.placeholder = '—';
+      paTd.appendChild(paInput);
+
+      const modelTd = document.createElement('td');
+      modelTd.className = 'model-values';
+
+      tr.appendChild(speedTd);
+      tr.appendChild(flowTd);
+      tr.appendChild(accelTd);
+      tr.appendChild(paTd);
+      tr.appendChild(modelTd);
+
+      tbody.appendChild(tr);
+
+      const updateRow = () => {
+        const fv = flowInput.value || '';
+        const pv = paInput.value || '';
+        modelTd.textContent = `${pv}, ${fv}, ${accel}`;
+        updateConfig();
+      };
+
+      flowInput.addEventListener('input', updateRow);
+      paInput.addEventListener('input', updateRow);
+    }
+  }
+
+  updateConfig();
+
+  const firstFlow = tbody.querySelector('.flow-input');
+  if (firstFlow) firstFlow.focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const target = e.target;
+  if (!target.classList.contains('flow-input') && !target.classList.contains('pa-input')) return;
+
+  const row = target.closest('.data-row');
+  if (!row) return;
+
+  const allRows = Array.from(tbody.querySelectorAll('.data-row'));
+  const idx = allRows.indexOf(row);
+
+  if (e.shiftKey) {
+    if (target.classList.contains('pa-input')) {
+      e.preventDefault();
+      const flow = row.querySelector('.flow-input');
+      if (flow) flow.focus();
+    } else if (target.classList.contains('flow-input')) {
+      if (idx > 0) {
+        e.preventDefault();
+        const prev = allRows[idx - 1].querySelector('.pa-input');
+        if (prev) prev.focus();
+      }
+    }
+  } else {
+    if (target.classList.contains('flow-input')) {
+      e.preventDefault();
+      const pa = row.querySelector('.pa-input');
+      if (pa) pa.focus();
+    } else if (target.classList.contains('pa-input')) {
+      if (idx < allRows.length - 1) {
+        e.preventDefault();
+        const next = allRows[idx + 1].querySelector('.flow-input');
+        if (next) next.focus();
+      }
+    }
+  }
+});
+
+copyBtn.addEventListener('click', () => {
+  const text = configOutput.value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    copyBtn.textContent = 'Copied!';
+    copyBtn.classList.add('copied');
+    setTimeout(() => {
+      copyBtn.textContent = 'Copy';
+      copyBtn.classList.remove('copied');
+    }, 2000);
+  }).catch(() => {
+    configOutput.select();
+    document.execCommand('copy');
+  });
+});
+
+generateBtn.addEventListener('click', generate);
+generate();
+</script>
+</body>
+</html>
