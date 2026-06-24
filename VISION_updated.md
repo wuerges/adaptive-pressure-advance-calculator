@@ -2,7 +2,7 @@
 
 Single HTML page to generate an adaptive pressure advance measurements table for Klipper.
 
-Only HTML, CSS, and JavaScript in a single web page. No dependencies.
+Built with Leptos (Rust → WASM), bundled with Trunk, deployable on Vercel.
 
 ## Inputs
 
@@ -80,3 +80,9 @@ The config text area shows one line per row:
 0.026 , 11.51 , 4000
 0.024 , 15.35 , 4000
 ```
+
+## Build & deploy
+
+- Build: `trunk build --release` → outputs `dist/`
+- Deploy: import the repo on Vercel — it auto-detects the config
+- The app is fully client-side (CSR); no server or backend required
