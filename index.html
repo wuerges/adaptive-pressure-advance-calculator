@@ -140,10 +140,26 @@ tbody td input:focus {
   transition: background .15s;
 }
 .copy-btn:hover { background: #dee2e6; }
+.copy-btn:disabled {
+  background: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 .copy-btn.copied {
   background: #2d6a4f;
   color: #fff;
   pointer-events: none;
+}
+.status-good {
+  color: #2d6a4f;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.status-bad {
+  color: #c92a2a;
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 textarea {
   width: 100%;
@@ -200,7 +216,8 @@ textarea {
 <div class="config-section">
   <div class="config-header">
     <h2>Config</h2>
-    <button class="copy-btn" id="copyBtn">Copy</button>
+    <span id="configStatus" class="status-bad">✗ Fill in all Flow and PA values</span>
+    <button class="copy-btn" id="copyBtn" disabled>Copy</button>
   </div>
   <textarea id="configOutput" readonly spellcheck="false"></textarea>
 </div>
@@ -212,9 +229,30 @@ const generateBtn = document.getElementById('generateBtn');
 const tbody = document.getElementById('tbody');
 const configOutput = document.getElementById('configOutput');
 const copyBtn = document.getElementById('copyBtn');
+const configStatus = document.getElementById('configStatus');
 
 function parseList(str) {
   return str.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0);
+}
+
+function validate() {
+  const rows = tbody.querySelectorAll('.data-row');
+  if (!rows.length) {
+    copyBtn.disabled = true;
+    configStatus.className = 'status-bad';
+    configStatus.textContent = '✗ Generate a table first';
+    return false;
+  }
+  let allFilled = true;
+  for (const row of rows) {
+    const flow = row.querySelector('.flow-input').value.trim();
+    const pa = row.querySelector('.pa-input').value.trim();
+    if (!flow || !pa) { allFilled = false; break; }
+  }
+  copyBtn.disabled = !allFilled;
+  configStatus.textContent = allFilled ? '✓ Ready to copy' : '✗ Fill in all Flow and PA values';
+  configStatus.className = allFilled ? 'status-good' : 'status-bad';
+  return allFilled;
 }
 
 function updateConfig() {
@@ -227,6 +265,7 @@ function updateConfig() {
     lines.push(`${paInput.value || ''}, ${flowInput.value || ''}, ${accel}`);
   }
   configOutput.value = lines.join('\n');
+  validate();
 }
 
 function generate() {
@@ -244,6 +283,7 @@ function generate() {
     tr.appendChild(td);
     tbody.appendChild(tr);
     configOutput.value = '';
+    validate();
     return;
   }
 
